@@ -1,0 +1,207 @@
+export const COMP_MODES = [
+  "general",
+  "pricing",
+  "subdivision",
+  "rural",
+  "deliverable",
+] as const;
+
+export type CompMode = (typeof COMP_MODES)[number];
+
+export interface CompEvaluateRequest {
+  mode: CompMode;
+  parcelLink: string;
+  county: string;
+  state: string;
+  acreage: string;
+  sellerAskingPrice: string;
+  question: string;
+  knownFacts: string;
+  topK: number;
+}
+
+export interface RetrievedCompChunk {
+  chunkId: string;
+  docId: string;
+  category: string;
+  pageNumber: number;
+  text: string;
+  score: number;
+  matchedTerms: string[];
+}
+
+export interface RecommendedCompSource {
+  docId: string;
+  category: string;
+  priorityRank: number;
+  useFor: string;
+}
+
+export interface CompPromptPackage {
+  retrievalQuery: string;
+  systemPrompt: string;
+  userPrompt: string;
+  combinedPrompt: string;
+}
+
+export type CompModelProvider = "openai" | "anthropic";
+export type CompGenerationStatus = "completed" | "not_configured" | "failed";
+export type CompConfidence = "low" | "medium" | "high";
+
+export interface CompOfferPrices {
+  fiftyPercent: string;
+  sixtyPercent: string;
+  seventyPercent: string;
+  landlockedPrice: string;
+  reasoning: string;
+}
+
+export interface CompValueAddMarketValue {
+  status: "available" | "not_applicable" | "needs_verification";
+  marketValue: string;
+  summary: string;
+  lotCount: string;
+  lotSize: string;
+  estimatedCosts: string;
+}
+
+export interface CompValueAddOfferPrice {
+  status: "available" | "not_applicable" | "needs_verification";
+  fiftyPercent: string;
+  sixtyPercent: string;
+  seventyPercent: string;
+  reasoning: string;
+}
+
+export interface CompKeyComp {
+  acreage: string;
+  salePrice: string;
+  pricePerAcre: string;
+  status: string;
+  notes: string;
+}
+
+export interface CompLeadStageClassification {
+  sellerAskingPrice: string;
+  marketValue: string;
+  differenceDollar: string;
+  differencePercentOfMarketValue: string;
+  stage: string;
+  reasoning: string;
+}
+
+export interface CompEvaluationDeliverable {
+  executiveSummary: string;
+  marketValue: string;
+  pricePerAcre: string;
+  marketValueReasoning: string;
+  confidence: CompConfidence;
+  offerPrices: CompOfferPrices;
+  valueAddMarketValue: CompValueAddMarketValue;
+  valueAddOfferPrice: CompValueAddOfferPrice;
+  negotiationStrategies: string[];
+  extraNotes: string[];
+  recommendedListPrice: string;
+  recommendedListPriceReasoning: string;
+  keyComps: CompKeyComp[];
+  questionsToAskSeller: string[];
+  leadStageClassification: CompLeadStageClassification;
+  dataGaps: string[];
+  fullDeliverableMarkdown: string;
+}
+
+export interface CompModelUsage {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+}
+
+export interface CompGenerationResult {
+  status: CompGenerationStatus;
+  provider: CompModelProvider | null;
+  model: string | null;
+  evaluation: CompEvaluationDeliverable | null;
+  rawText: string | null;
+  error: string | null;
+  artifactPath: string | null;
+  usage: CompModelUsage | null;
+}
+
+export interface CompEvaluateResponse {
+  request: CompEvaluateRequest;
+  warnings: string[];
+  promptPackage: CompPromptPackage;
+  retrieval: {
+    topK: number;
+    recommendedSources: RecommendedCompSource[];
+    chunks: RetrievedCompChunk[];
+  };
+  generation: CompGenerationResult;
+}
+
+const DEFAULT_REQUEST: CompEvaluateRequest = {
+  mode: "general",
+  parcelLink: "",
+  county: "",
+  state: "",
+  acreage: "",
+  sellerAskingPrice: "",
+  question: "",
+  knownFacts: "",
+  topK: 8,
+};
+
+function readString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readMode(value: unknown): CompMode {
+  return COMP_MODES.includes(value as CompMode) ? (value as CompMode) : DEFAULT_REQUEST.mode;
+}
+
+function readTopK(value: unknown) {
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim()
+        ? Number(value)
+        : DEFAULT_REQUEST.topK;
+
+  if (!Number.isFinite(numericValue)) {
+    return DEFAULT_REQUEST.topK;
+  }
+
+  return Math.max(3, Math.min(12, Math.round(numericValue)));
+}
+
+export function parseCompEvaluateRequest(payload: unknown): CompEvaluateRequest {
+  const record = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+
+  return {
+    mode: readMode(record.mode),
+    parcelLink: readString(record.parcelLink),
+    county: readString(record.county),
+    state: readString(record.state),
+    acreage: readString(record.acreage),
+    sellerAskingPrice: readString(record.sellerAskingPrice),
+    question: readString(record.question),
+    knownFacts: readString(record.knownFacts),
+    topK: readTopK(record.topK),
+  };
+}
+
+export const COMP_MODE_LABELS: Record<CompMode, string> = {
+  general: "General comp",
+  pricing: "Pricing",
+  subdivision: "Subdivision",
+  rural: "Rural",
+  deliverable: "Deliverable only",
+};
+
+export const COMP_MODE_DESCRIPTIONS: Record<CompMode, string> = {
+  general: "Balanced retrieval across the main handbook and supporting references.",
+  pricing: "Bias toward market value, comps, and PPA trendline logic.",
+  subdivision: "Bias toward hidden value, lot design, and split feasibility.",
+  rural: "Bias toward access problems and extreme rural discounts.",
+  deliverable: "Bias toward the final 10-section DewClaw output format.",
+};
