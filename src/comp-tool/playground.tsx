@@ -1,7 +1,13 @@
 "use client";
 
+import Link from "next/link";
+import type { ReactNode } from "react";
 import { useState, useTransition } from "react";
 
+import {
+  COMMON_COUNTY_OPTIONS_BY_STATE,
+  US_STATE_OPTIONS,
+} from "@/comp-tool/location-data";
 import {
   COMP_MODE_DESCRIPTIONS,
   COMP_MODE_LABELS,
@@ -22,6 +28,11 @@ type FormState = {
   knownFacts: string;
   topK: string;
 };
+
+type ParseParcelResponse = Pick<
+  CompEvaluateResponse,
+  "request" | "parcelEnrichment" | "warnings"
+>;
 
 const DEFAULT_FORM: FormState = {
   mode: "general",
@@ -46,128 +57,188 @@ const RECOMMENDATION_LABELS: Record<
   pass: "Pass",
 };
 
-function GenerationSummary({ evaluation }: { evaluation: CompEvaluationDeliverable }) {
+function mergeText(current: string, incoming: string) {
+  const parts = [current, incoming]
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const unique = [...new Set(parts.map((part) => part.toLowerCase()))];
+
+  if (unique.length === 1 && parts.length > 1) {
+    return parts[0];
+  }
+
+  return parts.join("\n");
+}
+
+function BulletList({ items, empty = "N/A" }: { items: string[]; empty?: string }) {
+  const filtered = items.filter(Boolean);
+
+  if (!filtered.length) {
+    return <p className="muted-copy">{empty}</p>;
+  }
+
   return (
-    <div className="stats-grid comp-summary-grid">
-      <article className="stat-card decision-card">
-        <span>Decision</span>
-        <strong>{RECOMMENDATION_LABELS[evaluation.decisionSummary.recommendation]}</strong>
-        <p>{evaluation.decisionSummary.nextAction || "--"}</p>
-      </article>
-
-      <article className="stat-card">
-        <span>Market value</span>
-        <strong>{evaluation.marketValue || "--"}</strong>
-        <p>PPA: {evaluation.pricePerAcre || "--"}</p>
-      </article>
-
-      <article className="stat-card">
-        <span>Opening offer</span>
-        <strong>{evaluation.offerStrategy.openingOffer || evaluation.offerPrices.fiftyPercent || "--"}</strong>
-        <p>
-          Target: {evaluation.offerStrategy.targetOffer || "--"} | Max:{" "}
-          {evaluation.offerStrategy.maxOffer || "--"}
-        </p>
-      </article>
-
-      <article className="stat-card">
-        <span>Data quality</span>
-        <strong>{evaluation.dataQuality.grade || "--"}</strong>
-        <p>{evaluation.dataQuality.score || evaluation.confidence}</p>
-      </article>
-    </div>
+    <ul className="flat-list compact-list">
+      {filtered.map((item) => (
+        <li key={item}>{item}</li>
+      ))}
+    </ul>
   );
 }
 
-function DecisionPanel({ evaluation }: { evaluation: CompEvaluationDeliverable }) {
+function OutputSection({
+  id,
+  title,
+  children,
+}: {
+  id: string;
+  title: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="callout-card decision-panel">
-      <strong>{evaluation.decisionSummary.oneLineDecision || "Decision needs review"}</strong>
-      <p>{evaluation.decisionSummary.decisionReason || evaluation.executiveSummary}</p>
+    <section className="callout-card simple-output-section">
+      <div className="simple-section-head">
+        <strong>{title}</strong>
+        <Link href={`/references#${id}`}>Reference</Link>
+      </div>
+      {children}
+    </section>
+  );
+}
 
-      {evaluation.decisionSummary.topRisks.length ? (
-        <>
-          <span className="section-label">Top risks</span>
-          <ul className="flat-list">
-            {evaluation.decisionSummary.topRisks.map((risk) => (
-              <li key={risk}>{risk}</li>
-            ))}
-          </ul>
-        </>
+function RunStatus({ result }: { result: CompEvaluateResponse }) {
+  return (
+    <div className="run-status">
+      <span>
+        {result.generation.status === "completed"
+          ? `Generated with ${result.generation.provider}`
+          : result.generation.status === "not_configured"
+            ? "Prompt built, model not configured"
+            : "Generation failed"}
+      </span>
+      {result.generation.usage ? (
+        <span>
+          Tokens: {result.generation.usage.inputTokens ?? "--"} /{" "}
+          {result.generation.usage.outputTokens ?? "--"}
+        </span>
       ) : null}
     </div>
   );
 }
 
-function OfferStrategyPanel({ evaluation }: { evaluation: CompEvaluationDeliverable }) {
-  return (
-    <div className="callout-card">
-      <strong>Offer strategy</strong>
-      <div className="mini-grid">
-        <div>
-          <span>Opening</span>
-          <b>{evaluation.offerStrategy.openingOffer || "--"}</b>
-        </div>
-        <div>
-          <span>Target</span>
-          <b>{evaluation.offerStrategy.targetOffer || "--"}</b>
-        </div>
-        <div>
-          <span>Max</span>
-          <b>{evaluation.offerStrategy.maxOffer || "--"}</b>
-        </div>
-        <div>
-          <span>Walk away</span>
-          <b>{evaluation.offerStrategy.walkAwayPrice || "--"}</b>
-        </div>
+function SimplifiedOutput({ result }: { result: CompEvaluateResponse }) {
+  const evaluation = result.generation.evaluation;
+
+  if (!evaluation) {
+    return (
+      <div className="comp-output">
+        <RunStatus result={result} />
+        {result.warnings.length ? (
+          <OutputSection id="others" title="Warnings">
+            <BulletList items={result.warnings} />
+          </OutputSection>
+        ) : null}
+        <OutputSection id="others" title="Prompt packet">
+          <p className="muted-copy">
+            The model did not return a completed comp. Use the generated prompt or fix the model
+            configuration.
+          </p>
+        </OutputSection>
       </div>
-      <p>{evaluation.offerStrategy.reasoning || evaluation.offerPrices.reasoning}</p>
-      {evaluation.offerStrategy.scriptAngle ? (
-        <p>
-          <strong>Script angle:</strong> {evaluation.offerStrategy.scriptAngle}
-        </p>
+    );
+  }
+
+  return (
+    <div className="comp-output compact-output">
+      <RunStatus result={result} />
+
+      {result.warnings.length ? (
+        <OutputSection id="others" title="Warnings">
+          <BulletList items={result.warnings} />
+        </OutputSection>
       ) : null}
-    </div>
-  );
-}
 
-function PasteReadyPanel({ evaluation }: { evaluation: CompEvaluationDeliverable }) {
-  return (
-    <div className="callout-card">
-      <strong>Paste-ready outputs</strong>
-      <div className="copy-stack">
-        <div>
-          <span className="section-label">Follow Up Boss note</span>
-          <pre className="compact-pre">{evaluation.pasteReadyOutputs.followUpBossNote || "--"}</pre>
-        </div>
-        <div>
-          <span className="section-label">Call prep brief</span>
-          <pre className="compact-pre">{evaluation.pasteReadyOutputs.callPrepBrief || "--"}</pre>
-        </div>
-      </div>
-    </div>
-  );
-}
+      <OutputSection id="decision" title="1. Decision">
+        <BulletList
+          items={[
+            `Recommendation: ${RECOMMENDATION_LABELS[evaluation.decisionSummary.recommendation]}`,
+            `Next action: ${evaluation.decisionSummary.nextAction || "Needs verification"}`,
+            `Reason: ${evaluation.decisionSummary.decisionReason || evaluation.executiveSummary}`,
+            ...evaluation.decisionSummary.topRisks.slice(0, 3).map((risk) => `Risk: ${risk}`),
+          ]}
+        />
+      </OutputSection>
 
-function VerificationPanel({ evaluation }: { evaluation: CompEvaluationDeliverable }) {
-  return (
-    <div className="callout-card">
-      <strong>Verification checklist</strong>
-      <p>
-        Data quality: {evaluation.dataQuality.grade || "--"} ({evaluation.dataQuality.score || "--"})
-        . {evaluation.dataQuality.reasoning}
-      </p>
-      <ul className="flat-list">
-        {[
-          ...evaluation.pasteReadyOutputs.analystChecklist,
-          ...evaluation.dataQuality.criticalMissingItems,
-        ]
-          .filter(Boolean)
-          .slice(0, 10)
-          .map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-      </ul>
+      <OutputSection id="market-value" title="2. Market Value">
+        <BulletList
+          items={[
+            `Market value: ${evaluation.marketValue || "Needs verification"}`,
+            `Price per acre: ${evaluation.pricePerAcre || "Needs verification"}`,
+            `Confidence: ${evaluation.confidence}`,
+            `Data quality: ${evaluation.dataQuality.grade || "--"} (${evaluation.dataQuality.score || "--"})`,
+            `Reason: ${evaluation.marketValueReasoning || "N/A"}`,
+          ]}
+        />
+      </OutputSection>
+
+      <OutputSection id="offer" title="3. Offer">
+        <BulletList
+          items={[
+            `Opening: ${evaluation.offerStrategy.openingOffer || evaluation.offerPrices.fiftyPercent || "N/A"}`,
+            `Target: ${evaluation.offerStrategy.targetOffer || evaluation.offerPrices.sixtyPercent || "N/A"}`,
+            `Max: ${evaluation.offerStrategy.maxOffer || evaluation.offerPrices.seventyPercent || "N/A"}`,
+            `Walk away: ${evaluation.offerStrategy.walkAwayPrice || "N/A"}`,
+            `List price: ${evaluation.recommendedListPrice || "N/A"}`,
+            `Script angle: ${evaluation.offerStrategy.scriptAngle || "N/A"}`,
+          ]}
+        />
+      </OutputSection>
+
+      <OutputSection id="others" title="4. Others">
+        <div className="copy-stack">
+          <div>
+            <span className="section-label">Follow Up Boss note</span>
+            <pre className="compact-pre">
+              {evaluation.pasteReadyOutputs.followUpBossNote || "N/A"}
+            </pre>
+          </div>
+
+          <div>
+            <span className="section-label">Call prep</span>
+            <pre className="compact-pre">{evaluation.pasteReadyOutputs.callPrepBrief || "N/A"}</pre>
+          </div>
+
+          <div>
+            <span className="section-label">Verify next</span>
+            <BulletList
+              items={[
+                ...evaluation.pasteReadyOutputs.analystChecklist,
+                ...evaluation.dataQuality.criticalMissingItems,
+                ...evaluation.dataGaps,
+              ].slice(0, 8)}
+            />
+          </div>
+        </div>
+      </OutputSection>
+
+      <details className="details-card">
+        <summary>Full deliverable</summary>
+        <pre>{evaluation.fullDeliverableMarkdown}</pre>
+      </details>
+
+      <details className="details-card">
+        <summary>Run details</summary>
+        <BulletList
+          items={[
+            `State: ${result.request.state || "--"}`,
+            `County: ${result.request.county || "--"}`,
+            `Acreage: ${result.request.acreage || "--"}`,
+            `Asking price: ${result.request.sellerAskingPrice || "--"}`,
+            `Parcel ingestion: ${result.parcelEnrichment?.status || "not used"}`,
+            `Artifact: ${result.generation.artifactPath || "--"}`,
+          ]}
+        />
+      </details>
     </div>
   );
 }
@@ -176,13 +247,62 @@ export function CompToolPlayground() {
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
   const [result, setResult] = useState<CompEvaluateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [parseStatus, setParseStatus] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [isParsing, startParseTransition] = useTransition();
+  const countyOptions = COMMON_COUNTY_OPTIONS_BY_STATE[form.state] ?? [];
 
   function updateField<Key extends keyof FormState>(key: Key, value: FormState[Key]) {
     setForm((current) => ({
       ...current,
       [key]: value,
+      ...(key === "state" ? { county: "" } : {}),
     }));
+  }
+
+  function parseParcelLink() {
+    setError(null);
+    setParseStatus(null);
+
+    if (!form.parcelLink.trim()) {
+      setError("Add a parcel link before parsing.");
+      return;
+    }
+
+    startParseTransition(async () => {
+      try {
+        const response = await fetch("/api/comp/parse-parcel", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(form),
+        });
+
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(payload?.error ?? "Failed to parse the parcel link.");
+        }
+
+        const payload = (await response.json()) as ParseParcelResponse;
+
+        setForm((current) => ({
+          ...current,
+          state: payload.request.state || current.state,
+          county: payload.request.county || current.county,
+          acreage: payload.request.acreage || current.acreage,
+          question: current.question || payload.request.question,
+          knownFacts: mergeText(current.knownFacts, payload.request.knownFacts),
+        }));
+
+        const status = payload.parcelEnrichment?.status ?? "not_used";
+        const fetchMode = payload.parcelEnrichment?.fetchMode ?? "not_applicable";
+        setParseStatus(`Parse status: ${status} (${fetchMode}).`);
+      } catch (caughtError) {
+        setParseStatus(null);
+        setError(caughtError instanceof Error ? caughtError.message : "Something went wrong.");
+      }
+    });
   }
 
   function runEvaluation() {
@@ -220,8 +340,8 @@ export function CompToolPlayground() {
             <p className="eyebrow">Input</p>
             <h2>Comp request</h2>
           </div>
-          <span className={`filters-status${isPending ? " is-pending" : ""}`}>
-            {isPending ? "Generating..." : "Ready"}
+          <span className={`filters-status${isPending || isParsing ? " is-pending" : ""}`}>
+            {isPending ? "Generating..." : isParsing ? "Parsing..." : "Ready"}
           </span>
         </div>
 
@@ -251,25 +371,48 @@ export function CompToolPlayground() {
             />
           </label>
 
+          <button
+            className="light-button"
+            type="button"
+            onClick={parseParcelLink}
+            disabled={isParsing}
+          >
+            {isParsing ? "Parsing parcel link..." : "Parse parcel link"}
+          </button>
+
+          {parseStatus ? <p className="auth-note">{parseStatus}</p> : null}
+
           <div className="input-pair">
             <label className="field">
-              <span>County</span>
-              <input
-                type="text"
-                placeholder="Example County"
-                value={form.county}
-                onChange={(event) => updateField("county", event.target.value)}
-              />
+              <span>State</span>
+              <select
+                value={form.state}
+                onChange={(event) => updateField("state", event.target.value)}
+              >
+                <option value="">Select state</option>
+                {US_STATE_OPTIONS.map((state) => (
+                  <option key={state.code} value={state.code}>
+                    {state.code} - {state.name}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label className="field">
-              <span>State</span>
+              <span>County</span>
               <input
+                list="county-options"
                 type="text"
-                placeholder="TX"
-                value={form.state}
-                onChange={(event) => updateField("state", event.target.value)}
+                placeholder={form.state ? "Select or type county" : "Select state first"}
+                value={form.county}
+                onChange={(event) => updateField("county", event.target.value)}
               />
+              <datalist id="county-options">
+                {countyOptions.map((county) => (
+                  <option key={county} value={county} />
+                ))}
+              </datalist>
+              <small>Searchable county dropdown. Type manually if the county is not listed.</small>
             </label>
           </div>
 
@@ -285,7 +428,7 @@ export function CompToolPlayground() {
             </label>
 
             <label className="field">
-              <span>Seller asking price</span>
+              <span>Asking price</span>
               <input
                 type="text"
                 placeholder="$85,000"
@@ -298,8 +441,8 @@ export function CompToolPlayground() {
           <label className="field">
             <span>Primary question</span>
             <textarea
-              rows={4}
-              placeholder="What should this property be worth and is there any subdivision upside?"
+              rows={3}
+              placeholder="What should this property be worth and what should we offer?"
               value={form.question}
               onChange={(event) => updateField("question", event.target.value)}
             />
@@ -308,21 +451,10 @@ export function CompToolPlayground() {
           <label className="field">
             <span>Known facts / notes</span>
             <textarea
-              rows={8}
+              rows={7}
               placeholder="Road frontage, wooded vs pasture, nearby comps, access issues, wetlands, structures, seller notes..."
               value={form.knownFacts}
               onChange={(event) => updateField("knownFacts", event.target.value)}
-            />
-          </label>
-
-          <label className="field field-inline">
-            <span>Top chunks</span>
-            <input
-              type="number"
-              min={3}
-              max={12}
-              value={form.topK}
-              onChange={(event) => updateField("topK", event.target.value)}
             />
           </label>
 
@@ -333,7 +465,7 @@ export function CompToolPlayground() {
               onClick={runEvaluation}
               disabled={isPending}
             >
-              {isPending ? "Generating..." : "Generate comp deliverable"}
+              {isPending ? "Generating..." : "Generate comp"}
             </button>
           </div>
 
@@ -347,196 +479,18 @@ export function CompToolPlayground() {
             <p className="eyebrow">Output</p>
             <h2>Comp result</h2>
           </div>
-          <span className="table-helper">Retrieval runs always. Generation runs when a model key is configured.</span>
+          <Link className="reference-link" href="/references">
+            References
+          </Link>
         </div>
 
         {!result ? (
           <p className="auth-note">
-            Submit a property question and the tool will assemble the DewClaw source packet, build
-            the prompt, and generate the deliverable when a model key is available.
+            Output will stay short: decision, market value, offer, and other notes. Methodology
+            lives on the references page.
           </p>
         ) : (
-          <div className="comp-output">
-            {result.warnings.length ? (
-              <div className="callout-card">
-                <strong>Warnings</strong>
-                <ul className="flat-list">
-                  {result.warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            <div className="callout-card">
-              <strong>Model status</strong>
-              <p>
-                {result.generation.status === "completed"
-                  ? `Completed with ${result.generation.provider} (${result.generation.model}).`
-                  : result.generation.status === "not_configured"
-                    ? "No model key is configured yet. Retrieval and prompt assembly still completed."
-                    : `Generation failed with ${result.generation.provider} (${result.generation.model}).`}
-              </p>
-              {result.generation.error ? <p>{result.generation.error}</p> : null}
-              {result.generation.artifactPath ? (
-                <p>
-                  Artifact: <code>{result.generation.artifactPath}</code>
-                </p>
-              ) : null}
-              {result.generation.usage ? (
-                <p>
-                  Tokens in/out: {result.generation.usage.inputTokens ?? "--"} /{" "}
-                  {result.generation.usage.outputTokens ?? "--"}
-                </p>
-              ) : null}
-            </div>
-
-            {result.parcelEnrichment ? (
-              <div className="callout-card">
-                <strong>Parcel link ingestion</strong>
-                <ul className="flat-list">
-                  <li>Status: {result.parcelEnrichment.status}</li>
-                  <li>Fetch mode: {result.parcelEnrichment.fetchMode}</li>
-                  <li>
-                    Final URL: {result.parcelEnrichment.finalUrl || result.request.parcelLink || "--"}
-                  </li>
-                  <li>Page title: {result.parcelEnrichment.pageTitle || "--"}</li>
-                  <li>Extracted county: {result.parcelEnrichment.extractedFields.county || "--"}</li>
-                  <li>Extracted state: {result.parcelEnrichment.extractedFields.state || "--"}</li>
-                  <li>
-                    Extracted acreage: {result.parcelEnrichment.extractedFields.acreage || "--"}
-                  </li>
-                  <li>
-                    Extracted known facts:{" "}
-                    {result.parcelEnrichment.extractedFields.knownFacts || "--"}
-                  </li>
-                  <li>
-                    Diagnostics: {result.parcelEnrichment.diagnostics.join(" | ") || "--"}
-                  </li>
-                </ul>
-              </div>
-            ) : null}
-
-            <div className="callout-card">
-              <strong>Resolved request</strong>
-              <ul className="flat-list">
-                <li>County: {result.request.county || "--"}</li>
-                <li>State: {result.request.state || "--"}</li>
-                <li>Acreage: {result.request.acreage || "--"}</li>
-                <li>Seller asking price: {result.request.sellerAskingPrice || "--"}</li>
-                <li>Primary question: {result.request.question || "--"}</li>
-                <li>Known facts: {result.request.knownFacts || "--"}</li>
-              </ul>
-            </div>
-
-            {result.generation.evaluation ? (
-              <>
-                <GenerationSummary evaluation={result.generation.evaluation} />
-
-                <DecisionPanel evaluation={result.generation.evaluation} />
-
-                <OfferStrategyPanel evaluation={result.generation.evaluation} />
-
-                <PasteReadyPanel evaluation={result.generation.evaluation} />
-
-                <VerificationPanel evaluation={result.generation.evaluation} />
-
-                <div className="callout-card">
-                  <strong>Executive summary</strong>
-                  <p>{result.generation.evaluation.executiveSummary}</p>
-                </div>
-
-                <div className="prompt-block">
-                  <div className="prompt-block-head">
-                    <strong>Generated deliverable</strong>
-                  </div>
-                  <pre>{result.generation.evaluation.fullDeliverableMarkdown}</pre>
-                </div>
-
-                <div className="callout-card">
-                  <strong>Model notes</strong>
-                  <ul className="flat-list">
-                    <li>Confidence: {result.generation.evaluation.confidence}</li>
-                    <li>Lead stage: {result.generation.evaluation.leadStageClassification.stage || "--"}</li>
-                    <li>
-                      Recommended list price:{" "}
-                      {result.generation.evaluation.recommendedListPrice || "--"}
-                    </li>
-                    <li>
-                      Data gaps: {result.generation.evaluation.dataGaps.join(" | ") || "--"}
-                    </li>
-                  </ul>
-                </div>
-              </>
-            ) : null}
-
-            <div className="callout-card">
-              <strong>Retrieval query</strong>
-              <p>{result.promptPackage.retrievalQuery}</p>
-            </div>
-
-            <div className="callout-card">
-              <strong>Recommended sources</strong>
-              <ul className="flat-list">
-                {result.retrieval.recommendedSources.map((source) => (
-                  <li key={source.docId}>
-                    <code>{source.docId}</code> - {source.useFor}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="prompt-block">
-              <div className="prompt-block-head">
-                <strong>System prompt</strong>
-              </div>
-              <pre>{result.promptPackage.systemPrompt}</pre>
-            </div>
-
-            <div className="prompt-block">
-              <div className="prompt-block-head">
-                <strong>User prompt</strong>
-              </div>
-              <pre>{result.promptPackage.userPrompt}</pre>
-            </div>
-
-            <div className="prompt-block">
-              <div className="prompt-block-head">
-                <strong>Paste-ready prompt</strong>
-              </div>
-              <pre>{result.promptPackage.combinedPrompt}</pre>
-            </div>
-
-            {result.generation.rawText ? (
-              <div className="prompt-block">
-                <div className="prompt-block-head">
-                  <strong>Raw model output</strong>
-                </div>
-                <pre>{result.generation.rawText}</pre>
-              </div>
-            ) : null}
-
-            <div className="prompt-block">
-              <div className="prompt-block-head">
-                <strong>Retrieved chunks</strong>
-              </div>
-              <div className="chunk-list">
-                {result.retrieval.chunks.map((chunk) => (
-                  <article key={chunk.chunkId} className="chunk-card">
-                    <div className="chunk-meta">
-                      <span>{chunk.docId}</span>
-                      <span>p.{chunk.pageNumber}</span>
-                      <span>score {chunk.score}</span>
-                    </div>
-                    {chunk.matchedTerms.length ? (
-                      <p className="chunk-match">Matched: {chunk.matchedTerms.join(", ")}</p>
-                    ) : null}
-                    <p>{chunk.text}</p>
-                  </article>
-                ))}
-              </div>
-            </div>
-          </div>
+          <SimplifiedOutput result={result} />
         )}
       </section>
     </div>

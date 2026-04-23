@@ -109,13 +109,25 @@ button {
 }
 
 .secondary-button,
+.light-button,
 .auth-form button {
   border: 0;
   border-radius: 999px;
-  background: linear-gradient(135deg, #17202a 0%, #32404d 100%);
-  color: #fff;
   padding: 12px 18px;
   font-weight: 700;
+}
+
+.secondary-button,
+.auth-form button {
+  background: linear-gradient(135deg, #17202a 0%, #32404d 100%);
+  color: #fff;
+}
+
+.light-button {
+  width: fit-content;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink);
 }
 
 .source-pill,
@@ -186,6 +198,7 @@ button {
 
 .member-pill:hover,
 .secondary-button:hover,
+.light-button:hover,
 .auth-form button:hover {
   transform: translateY(-1px);
 }
@@ -563,6 +576,87 @@ button {
   margin: 10px 0 0;
   padding-left: 18px;
   color: var(--muted);
+}
+
+.compact-list {
+  margin-top: 8px;
+}
+
+.muted-copy {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.reference-link {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.simple-output-section {
+  display: grid;
+  gap: 10px;
+}
+
+.simple-section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+}
+
+.simple-section-head a {
+  color: var(--accent);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.compact-output {
+  gap: 14px;
+}
+
+.run-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.run-status span {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(23, 32, 42, 0.06);
+}
+
+.details-card {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+  overflow: hidden;
+}
+
+.details-card summary {
+  cursor: pointer;
+  padding: 14px 16px;
+  font-weight: 700;
+}
+
+.details-card pre {
+  margin: 0;
+  padding: 0 16px 16px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.reference-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+}
+
+.reference-card {
+  scroll-margin-top: 24px;
 }
 
 .flat-list li + li {

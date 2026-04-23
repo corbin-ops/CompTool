@@ -1,4 +1,5 @@
 import { CompToolPlayground } from "@/comp-tool/playground";
+import Link from "next/link";
 
 export function CompToolPageShell() {
   return (
@@ -6,14 +7,16 @@ export function CompToolPageShell() {
       <section className="hero-panel">
         <div>
           <p className="eyebrow">Dew Claw Comp Tool</p>
-          <h1>Retrieval-first comp builder</h1>
+          <h1>Comp dashboard</h1>
           <p>
-            This MVP assembles the right DewClaw training context and builds a prompt packet you can
-            send to Claude or wire into the next model step.
+            Short operator-facing output: decision, market value, offer, and next checks.
           </p>
         </div>
 
         <div className="hero-actions">
+          <Link className="secondary-button" href="/references">
+            References
+          </Link>
           <form action="/api/auth/logout" method="post">
             <button className="secondary-button" type="submit">
               Log out
