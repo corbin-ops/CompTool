@@ -22,3 +22,9 @@ services:
         sync: false
       - key: ANTHROPIC_MODEL
         value: claude-sonnet-4-6
+      - key: LAND_INSIGHTS_COOKIE
+        sync: false
+      - key: LAND_INSIGHTS_REFERER
+        value: https://app.landinsights.com/
+      - key: LAND_INSIGHTS_TIMEOUT_MS
+        value: 12000

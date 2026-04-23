@@ -35,9 +35,26 @@ const DEFAULT_FORM: FormState = {
   topK: "8",
 };
 
+const RECOMMENDATION_LABELS: Record<
+  CompEvaluationDeliverable["decisionSummary"]["recommendation"],
+  string
+> = {
+  hot_lead: "Hot lead",
+  warm_lead: "Warm lead",
+  nurture: "Nurture",
+  verify_first: "Verify first",
+  pass: "Pass",
+};
+
 function GenerationSummary({ evaluation }: { evaluation: CompEvaluationDeliverable }) {
   return (
     <div className="stats-grid comp-summary-grid">
+      <article className="stat-card decision-card">
+        <span>Decision</span>
+        <strong>{RECOMMENDATION_LABELS[evaluation.decisionSummary.recommendation]}</strong>
+        <p>{evaluation.decisionSummary.nextAction || "--"}</p>
+      </article>
+
       <article className="stat-card">
         <span>Market value</span>
         <strong>{evaluation.marketValue || "--"}</strong>
@@ -45,19 +62,112 @@ function GenerationSummary({ evaluation }: { evaluation: CompEvaluationDeliverab
       </article>
 
       <article className="stat-card">
-        <span>Offer range</span>
-        <strong>{evaluation.offerPrices.fiftyPercent || "--"}</strong>
+        <span>Opening offer</span>
+        <strong>{evaluation.offerStrategy.openingOffer || evaluation.offerPrices.fiftyPercent || "--"}</strong>
         <p>
-          60%: {evaluation.offerPrices.sixtyPercent || "--"} | 70%:{" "}
-          {evaluation.offerPrices.seventyPercent || "--"}
+          Target: {evaluation.offerStrategy.targetOffer || "--"} | Max:{" "}
+          {evaluation.offerStrategy.maxOffer || "--"}
         </p>
       </article>
 
       <article className="stat-card">
-        <span>Lead stage</span>
-        <strong>{evaluation.leadStageClassification.stage || "--"}</strong>
-        <p>{evaluation.leadStageClassification.differencePercentOfMarketValue || "--"}</p>
+        <span>Data quality</span>
+        <strong>{evaluation.dataQuality.grade || "--"}</strong>
+        <p>{evaluation.dataQuality.score || evaluation.confidence}</p>
       </article>
+    </div>
+  );
+}
+
+function DecisionPanel({ evaluation }: { evaluation: CompEvaluationDeliverable }) {
+  return (
+    <div className="callout-card decision-panel">
+      <strong>{evaluation.decisionSummary.oneLineDecision || "Decision needs review"}</strong>
+      <p>{evaluation.decisionSummary.decisionReason || evaluation.executiveSummary}</p>
+
+      {evaluation.decisionSummary.topRisks.length ? (
+        <>
+          <span className="section-label">Top risks</span>
+          <ul className="flat-list">
+            {evaluation.decisionSummary.topRisks.map((risk) => (
+              <li key={risk}>{risk}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function OfferStrategyPanel({ evaluation }: { evaluation: CompEvaluationDeliverable }) {
+  return (
+    <div className="callout-card">
+      <strong>Offer strategy</strong>
+      <div className="mini-grid">
+        <div>
+          <span>Opening</span>
+          <b>{evaluation.offerStrategy.openingOffer || "--"}</b>
+        </div>
+        <div>
+          <span>Target</span>
+          <b>{evaluation.offerStrategy.targetOffer || "--"}</b>
+        </div>
+        <div>
+          <span>Max</span>
+          <b>{evaluation.offerStrategy.maxOffer || "--"}</b>
+        </div>
+        <div>
+          <span>Walk away</span>
+          <b>{evaluation.offerStrategy.walkAwayPrice || "--"}</b>
+        </div>
+      </div>
+      <p>{evaluation.offerStrategy.reasoning || evaluation.offerPrices.reasoning}</p>
+      {evaluation.offerStrategy.scriptAngle ? (
+        <p>
+          <strong>Script angle:</strong> {evaluation.offerStrategy.scriptAngle}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function PasteReadyPanel({ evaluation }: { evaluation: CompEvaluationDeliverable }) {
+  return (
+    <div className="callout-card">
+      <strong>Paste-ready outputs</strong>
+      <div className="copy-stack">
+        <div>
+          <span className="section-label">Follow Up Boss note</span>
+          <pre className="compact-pre">{evaluation.pasteReadyOutputs.followUpBossNote || "--"}</pre>
+        </div>
+        <div>
+          <span className="section-label">Call prep brief</span>
+          <pre className="compact-pre">{evaluation.pasteReadyOutputs.callPrepBrief || "--"}</pre>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VerificationPanel({ evaluation }: { evaluation: CompEvaluationDeliverable }) {
+  return (
+    <div className="callout-card">
+      <strong>Verification checklist</strong>
+      <p>
+        Data quality: {evaluation.dataQuality.grade || "--"} ({evaluation.dataQuality.score || "--"})
+        . {evaluation.dataQuality.reasoning}
+      </p>
+      <ul className="flat-list">
+        {[
+          ...evaluation.pasteReadyOutputs.analystChecklist,
+          ...evaluation.dataQuality.criticalMissingItems,
+        ]
+          .filter(Boolean)
+          .slice(0, 10)
+          .map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+      </ul>
     </div>
   );
 }
@@ -281,9 +391,55 @@ export function CompToolPlayground() {
               ) : null}
             </div>
 
+            {result.parcelEnrichment ? (
+              <div className="callout-card">
+                <strong>Parcel link ingestion</strong>
+                <ul className="flat-list">
+                  <li>Status: {result.parcelEnrichment.status}</li>
+                  <li>Fetch mode: {result.parcelEnrichment.fetchMode}</li>
+                  <li>
+                    Final URL: {result.parcelEnrichment.finalUrl || result.request.parcelLink || "--"}
+                  </li>
+                  <li>Page title: {result.parcelEnrichment.pageTitle || "--"}</li>
+                  <li>Extracted county: {result.parcelEnrichment.extractedFields.county || "--"}</li>
+                  <li>Extracted state: {result.parcelEnrichment.extractedFields.state || "--"}</li>
+                  <li>
+                    Extracted acreage: {result.parcelEnrichment.extractedFields.acreage || "--"}
+                  </li>
+                  <li>
+                    Extracted known facts:{" "}
+                    {result.parcelEnrichment.extractedFields.knownFacts || "--"}
+                  </li>
+                  <li>
+                    Diagnostics: {result.parcelEnrichment.diagnostics.join(" | ") || "--"}
+                  </li>
+                </ul>
+              </div>
+            ) : null}
+
+            <div className="callout-card">
+              <strong>Resolved request</strong>
+              <ul className="flat-list">
+                <li>County: {result.request.county || "--"}</li>
+                <li>State: {result.request.state || "--"}</li>
+                <li>Acreage: {result.request.acreage || "--"}</li>
+                <li>Seller asking price: {result.request.sellerAskingPrice || "--"}</li>
+                <li>Primary question: {result.request.question || "--"}</li>
+                <li>Known facts: {result.request.knownFacts || "--"}</li>
+              </ul>
+            </div>
+
             {result.generation.evaluation ? (
               <>
                 <GenerationSummary evaluation={result.generation.evaluation} />
+
+                <DecisionPanel evaluation={result.generation.evaluation} />
+
+                <OfferStrategyPanel evaluation={result.generation.evaluation} />
+
+                <PasteReadyPanel evaluation={result.generation.evaluation} />
+
+                <VerificationPanel evaluation={result.generation.evaluation} />
 
                 <div className="callout-card">
                   <strong>Executive summary</strong>
@@ -301,6 +457,7 @@ export function CompToolPlayground() {
                   <strong>Model notes</strong>
                   <ul className="flat-list">
                     <li>Confidence: {result.generation.evaluation.confidence}</li>
+                    <li>Lead stage: {result.generation.evaluation.leadStageClassification.stage || "--"}</li>
                     <li>
                       Recommended list price:{" "}
                       {result.generation.evaluation.recommendedListPrice || "--"}

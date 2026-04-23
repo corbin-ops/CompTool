@@ -30,6 +30,9 @@ Standalone password-protected Next.js app for building DewClaw comp prompts from
    OPENAI_MODEL=gpt-4o-mini
    ANTHROPIC_API_KEY=...
    ANTHROPIC_MODEL=claude-sonnet-4-6
+   LAND_INSIGHTS_COOKIE=...
+   LAND_INSIGHTS_REFERER=https://app.landinsights.com/
+   LAND_INSIGHTS_TIMEOUT_MS=12000
    ```
 
 3. Start the app:
@@ -57,6 +60,15 @@ npm run build:comp-corpus
 - If both keys are present and `LLM_PROVIDER=auto`, the app currently prefers Anthropic first, then OpenAI.
 - If no provider key is present, the app still returns retrieval, prompts, and a `not_configured` generation state.
 - Evaluation artifacts are written to `data/evaluations/*.json`.
+
+## Land Insights ingestion
+
+- If `LAND_INSIGHTS_COOKIE` is set, the app will try to fetch parcel pages through a shared authenticated Land Insights session on the server.
+- If that cookie is missing, expired, or blocked, the app falls back to anonymous fetch + parcel-link inference.
+- The UI now shows `Parcel link ingestion` details so the team can see whether the request used:
+  - `shared_land_insights_session`
+  - `anonymous`
+- Keep in mind that session cookies expire. If authenticated ingestion starts failing, refresh `LAND_INSIGHTS_COOKIE` in Render.
 
 ## Deploy to Render
 

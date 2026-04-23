@@ -1,5 +1,6 @@
 import { retrieveCompContext } from "@/comp-tool/corpus";
 import { generateCompDeliverable } from "@/comp-tool/model";
+import { enrichCompRequestFromParcelLink } from "@/comp-tool/parcel-link";
 import { buildCompPromptPackage } from "@/comp-tool/prompt";
 import { saveCompEvaluationArtifact } from "@/comp-tool/storage";
 import {
@@ -10,22 +11,26 @@ import {
 export async function buildCompEvaluationResponse(
   payload: unknown,
 ): Promise<CompEvaluateResponse> {
-  const parsedRequest = parseCompEvaluateRequest(payload);
-  const retrieval = await retrieveCompContext(parsedRequest);
-  const warnings = [...retrieval.warnings];
+  const originalRequest = parseCompEvaluateRequest(payload);
+  const enrichment = await enrichCompRequestFromParcelLink(originalRequest);
+  const resolvedRequest = enrichment.request;
+  const retrieval = await retrieveCompContext(resolvedRequest);
+  const warnings = [...enrichment.warnings, ...retrieval.warnings];
   const promptPackage = buildCompPromptPackage(
-    parsedRequest,
+    resolvedRequest,
     retrieval.retrievalQuery,
     retrieval.chunks,
   );
   const generation = await generateCompDeliverable(promptPackage);
 
   const response: CompEvaluateResponse = {
-    request: parsedRequest,
+    request: resolvedRequest,
+    originalRequest,
+    parcelEnrichment: enrichment.parcelEnrichment,
     warnings,
     promptPackage,
     retrieval: {
-      topK: parsedRequest.topK,
+      topK: resolvedRequest.topK,
       recommendedSources: retrieval.recommendedSources,
       chunks: retrieval.chunks,
     },

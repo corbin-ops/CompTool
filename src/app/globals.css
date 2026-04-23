@@ -424,6 +424,18 @@ button {
   margin-top: 0;
 }
 
+.decision-card {
+  background:
+    linear-gradient(145deg, rgba(23, 32, 42, 0.96), rgba(50, 64, 77, 0.94)),
+    var(--panel);
+  color: #fff;
+}
+
+.decision-card span,
+.decision-card p {
+  color: rgba(255, 255, 255, 0.74);
+}
+
 .comp-form,
 .comp-output {
   display: grid;
@@ -481,6 +493,70 @@ button {
   margin: 10px 0 0;
   color: var(--muted);
   line-height: 1.6;
+}
+
+.decision-panel {
+  border-color: rgba(255, 122, 89, 0.36);
+  background:
+    linear-gradient(135deg, rgba(255, 122, 89, 0.12), rgba(42, 157, 143, 0.08)),
+    rgba(255, 255, 255, 0.78);
+}
+
+.section-label {
+  display: block;
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.mini-grid div {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(23, 32, 42, 0.04);
+}
+
+.mini-grid span,
+.mini-grid b {
+  display: block;
+}
+
+.mini-grid span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.mini-grid b {
+  margin-top: 6px;
+  font-size: 1.05rem;
+}
+
+.copy-stack {
+  display: grid;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.compact-pre {
+  margin: 8px 0 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(23, 32, 42, 0.04);
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
 }
 
 .flat-list {

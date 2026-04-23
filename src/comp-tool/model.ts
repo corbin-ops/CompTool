@@ -141,7 +141,7 @@ async function callOpenAiModel(promptPackage: CompPromptPackage, model: string, 
     body: JSON.stringify({
       model,
       temperature: 0.2,
-      max_tokens: 3200,
+      max_tokens: 5000,
       messages: [
         {
           role: "system",
@@ -211,7 +211,7 @@ async function callAnthropicModel(
     },
     body: JSON.stringify({
       model,
-      max_tokens: 3200,
+      max_tokens: 5000,
       system: promptPackage.systemPrompt,
       tool_choice: {
         type: "any",

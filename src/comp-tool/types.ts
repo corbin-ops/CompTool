@@ -20,6 +20,33 @@ export interface CompEvaluateRequest {
   topK: number;
 }
 
+export type CompParcelEnrichmentStatus =
+  | "fetched"
+  | "inferred"
+  | "unreachable"
+  | "invalid_url"
+  | "not_provided"
+  | "no_match";
+
+export type CompParcelFetchMode =
+  | "not_applicable"
+  | "anonymous"
+  | "shared_land_insights_session";
+
+export interface CompParcelEnrichment {
+  status: CompParcelEnrichmentStatus;
+  fetchMode: CompParcelFetchMode;
+  finalUrl: string | null;
+  pageTitle: string | null;
+  diagnostics: string[];
+  extractedFields: {
+    county: string;
+    state: string;
+    acreage: string;
+    knownFacts: string;
+  };
+}
+
 export interface RetrievedCompChunk {
   chunkId: string;
   docId: string;
@@ -90,13 +117,53 @@ export interface CompLeadStageClassification {
   reasoning: string;
 }
 
+export type CompDecisionRecommendation =
+  | "hot_lead"
+  | "warm_lead"
+  | "nurture"
+  | "verify_first"
+  | "pass";
+
+export interface CompDecisionSummary {
+  recommendation: CompDecisionRecommendation;
+  oneLineDecision: string;
+  nextAction: string;
+  decisionReason: string;
+  topRisks: string[];
+}
+
+export interface CompOfferStrategy {
+  openingOffer: string;
+  targetOffer: string;
+  maxOffer: string;
+  walkAwayPrice: string;
+  scriptAngle: string;
+  reasoning: string;
+}
+
+export interface CompDataQuality {
+  grade: "A" | "B" | "C" | "D" | "F";
+  score: string;
+  reasoning: string;
+  criticalMissingItems: string[];
+}
+
+export interface CompPasteReadyOutputs {
+  followUpBossNote: string;
+  callPrepBrief: string;
+  analystChecklist: string[];
+}
+
 export interface CompEvaluationDeliverable {
+  decisionSummary: CompDecisionSummary;
   executiveSummary: string;
   marketValue: string;
   pricePerAcre: string;
   marketValueReasoning: string;
   confidence: CompConfidence;
+  dataQuality: CompDataQuality;
   offerPrices: CompOfferPrices;
+  offerStrategy: CompOfferStrategy;
   valueAddMarketValue: CompValueAddMarketValue;
   valueAddOfferPrice: CompValueAddOfferPrice;
   negotiationStrategies: string[];
@@ -107,6 +174,7 @@ export interface CompEvaluationDeliverable {
   questionsToAskSeller: string[];
   leadStageClassification: CompLeadStageClassification;
   dataGaps: string[];
+  pasteReadyOutputs: CompPasteReadyOutputs;
   fullDeliverableMarkdown: string;
 }
 
@@ -129,6 +197,8 @@ export interface CompGenerationResult {
 
 export interface CompEvaluateResponse {
   request: CompEvaluateRequest;
+  originalRequest: CompEvaluateRequest;
+  parcelEnrichment: CompParcelEnrichment | null;
   warnings: string[];
   promptPackage: CompPromptPackage;
   retrieval: {
