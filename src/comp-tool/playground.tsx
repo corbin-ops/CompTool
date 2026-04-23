@@ -14,6 +14,8 @@ import {
   COMP_MODES,
   type CompEvaluateResponse,
   type CompEvaluationDeliverable,
+  type CompFeedbackPayload,
+  type CompFeedbackRating,
   type CompMode,
 } from "@/comp-tool/types";
 
@@ -34,6 +36,8 @@ type ParseParcelResponse = Pick<
   "request" | "parcelEnrichment" | "warnings"
 >;
 
+type FeedbackFormState = Omit<CompFeedbackPayload, "artifactPath">;
+
 const DEFAULT_FORM: FormState = {
   mode: "general",
   parcelLink: "",
@@ -44,6 +48,17 @@ const DEFAULT_FORM: FormState = {
   question: "",
   knownFacts: "",
   topK: "8",
+};
+
+const DEFAULT_FEEDBACK_FORM: FeedbackFormState = {
+  rating: "partial",
+  correctDecision: "",
+  correctMarketValue: "",
+  correctOpeningOffer: "",
+  whatWasWrong: "",
+  whatShouldChange: "",
+  ruleToRemember: "",
+  reviewerName: "",
 };
 
 const RECOMMENDATION_LABELS: Record<
@@ -126,6 +141,79 @@ function RunStatus({ result }: { result: CompEvaluateResponse }) {
   );
 }
 
+function DecisionSummaryTiles({
+  evaluation,
+}: {
+  evaluation: CompEvaluationDeliverable;
+}) {
+  const decisionLabel = RECOMMENDATION_LABELS[evaluation.decisionSummary.recommendation];
+  const topRisks = evaluation.decisionSummary.topRisks.filter(Boolean).slice(0, 3);
+  const offerLine = [
+    evaluation.offerStrategy.openingOffer || evaluation.offerPrices.fiftyPercent,
+    evaluation.offerStrategy.targetOffer || evaluation.offerPrices.sixtyPercent,
+  ]
+    .filter(Boolean)
+    .join(" -> ");
+
+  return (
+    <section className="decision-summary-grid" aria-label="Decision summary">
+      <article
+        className={`decision-summary-tile primary-summary-tile is-${evaluation.decisionSummary.recommendation}`}
+      >
+        <span>Decision</span>
+        <strong>{decisionLabel}</strong>
+        <p>{evaluation.decisionSummary.oneLineDecision || "Needs review before calling."}</p>
+      </article>
+
+      <article className="decision-summary-tile">
+        <span>Market value</span>
+        <strong>{evaluation.marketValue || "Verify"}</strong>
+        <p>
+          {evaluation.pricePerAcre || "PPA needed"} | {evaluation.confidence} confidence
+        </p>
+      </article>
+
+      <article className="decision-summary-tile">
+        <span>Offer</span>
+        <strong>
+          {evaluation.offerStrategy.openingOffer || evaluation.offerPrices.fiftyPercent || "N/A"}
+        </strong>
+        <p>{offerLine || "Offer range needs review"}</p>
+      </article>
+
+      <article className="decision-summary-tile">
+        <span>Next action</span>
+        <strong>{evaluation.decisionSummary.nextAction || "Verify first"}</strong>
+        <p>{evaluation.decisionSummary.decisionReason || "No decision reason returned."}</p>
+      </article>
+
+      <article className="decision-summary-tile risk-summary-tile">
+        <span>Top risks</span>
+        {topRisks.length ? (
+          <ul>
+            {topRisks.map((risk) => (
+              <li key={risk}>{risk}</li>
+            ))}
+          </ul>
+        ) : (
+          <strong>No major risks returned</strong>
+        )}
+      </article>
+
+      <article className="decision-summary-tile">
+        <span>Data quality</span>
+        <strong>
+          {evaluation.dataQuality.grade || "--"} / {evaluation.dataQuality.score || "--"}
+        </strong>
+        <p>
+          {evaluation.dataQuality.criticalMissingItems.slice(0, 2).join(", ") ||
+            "No critical gaps returned"}
+        </p>
+      </article>
+    </section>
+  );
+}
+
 function SimplifiedOutput({ result }: { result: CompEvaluateResponse }) {
   const evaluation = result.generation.evaluation;
 
@@ -150,6 +238,8 @@ function SimplifiedOutput({ result }: { result: CompEvaluateResponse }) {
 
   return (
     <div className="comp-output compact-output">
+      <DecisionSummaryTiles evaluation={evaluation} />
+
       <RunStatus result={result} />
 
       {result.warnings.length ? (
@@ -158,12 +248,10 @@ function SimplifiedOutput({ result }: { result: CompEvaluateResponse }) {
         </OutputSection>
       ) : null}
 
-      <OutputSection id="decision" title="1. Decision">
+      <OutputSection id="decision" title="Decision details">
         <BulletList
           items={[
-            `Decision status: ${RECOMMENDATION_LABELS[evaluation.decisionSummary.recommendation]} (Hot lead / Warm lead / Nurture / Verify first / Pass)`,
-            `One-line decision: ${evaluation.decisionSummary.oneLineDecision || "Needs review"}`,
-            `Immediate next action: ${evaluation.decisionSummary.nextAction || "Needs verification"}`,
+            `Reason: ${evaluation.decisionSummary.decisionReason || "N/A"}`,
             ...evaluation.decisionSummary.topRisks
               .slice(0, 5)
               .map((risk) => `Top risk: ${risk}`),
@@ -241,7 +329,174 @@ function SimplifiedOutput({ result }: { result: CompEvaluateResponse }) {
           ]}
         />
       </details>
+
+      <FeedbackPanel result={result} />
     </div>
+  );
+}
+
+function FeedbackPanel({ result }: { result: CompEvaluateResponse }) {
+  const [feedback, setFeedback] = useState<FeedbackFormState>(DEFAULT_FEEDBACK_FORM);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, startSaving] = useTransition();
+  const artifactPath = result.generation.artifactPath ?? "";
+
+  function updateFeedback<Key extends keyof FeedbackFormState>(
+    key: Key,
+    value: FeedbackFormState[Key],
+  ) {
+    setFeedback((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  function saveFeedback() {
+    setSaveStatus(null);
+    setSaveError(null);
+
+    startSaving(async () => {
+      try {
+        const response = await fetch("/api/comp/feedback", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            artifactPath,
+            ...feedback,
+          }),
+        });
+
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(payload?.error ?? "Failed to save feedback.");
+        }
+
+        const payload = (await response.json()) as { artifactPath?: string };
+        setSaveStatus(`Feedback saved: ${payload.artifactPath ?? "saved"}`);
+        setFeedback(DEFAULT_FEEDBACK_FORM);
+      } catch (caughtError) {
+        setSaveError(caughtError instanceof Error ? caughtError.message : "Something went wrong.");
+      }
+    });
+  }
+
+  return (
+    <section className="callout-card feedback-panel">
+      <div className="simple-section-head">
+        <strong>Training feedback</strong>
+        <span className="muted-chip">Saved as JSON</span>
+      </div>
+
+      <p className="muted-copy">
+        Use this when Corbin reviews an output. These corrections become the training and QA set.
+      </p>
+
+      <label className="field">
+        <span>Was this output correct?</span>
+        <select
+          value={feedback.rating}
+          onChange={(event) =>
+            updateFeedback("rating", event.target.value as CompFeedbackRating)
+          }
+        >
+          <option value="yes">Yes</option>
+          <option value="partial">Partially</option>
+          <option value="no">No</option>
+        </select>
+      </label>
+
+      <div className="input-pair">
+        <label className="field">
+          <span>Correct decision</span>
+          <input
+            type="text"
+            placeholder="Verify first, Warm lead, Pass..."
+            value={feedback.correctDecision}
+            onChange={(event) => updateFeedback("correctDecision", event.target.value)}
+          />
+        </label>
+
+        <label className="field">
+          <span>Correct market value</span>
+          <input
+            type="text"
+            placeholder="$74,000"
+            value={feedback.correctMarketValue}
+            onChange={(event) => updateFeedback("correctMarketValue", event.target.value)}
+          />
+        </label>
+      </div>
+
+      <div className="input-pair">
+        <label className="field">
+          <span>Correct opening offer</span>
+          <input
+            type="text"
+            placeholder="$37,000"
+            value={feedback.correctOpeningOffer}
+            onChange={(event) => updateFeedback("correctOpeningOffer", event.target.value)}
+          />
+        </label>
+
+        <label className="field">
+          <span>Reviewer</span>
+          <input
+            type="text"
+            placeholder="Corbin"
+            value={feedback.reviewerName}
+            onChange={(event) => updateFeedback("reviewerName", event.target.value)}
+          />
+        </label>
+      </div>
+
+      <label className="field">
+        <span>What was wrong?</span>
+        <textarea
+          rows={3}
+          placeholder="Example: It called this a Warm Lead, but access was not verified."
+          value={feedback.whatWasWrong}
+          onChange={(event) => updateFeedback("whatWasWrong", event.target.value)}
+        />
+      </label>
+
+      <label className="field">
+        <span>What should change?</span>
+        <textarea
+          rows={3}
+          placeholder="Example: Mark as Verify First until road frontage is confirmed."
+          value={feedback.whatShouldChange}
+          onChange={(event) => updateFeedback("whatShouldChange", event.target.value)}
+        />
+      </label>
+
+      <label className="field">
+        <span>Rule to remember next time</span>
+        <textarea
+          rows={3}
+          placeholder="Example: If access is missing, default to Verify First unless seller ask is clearly below 50% of value."
+          value={feedback.ruleToRemember}
+          onChange={(event) => updateFeedback("ruleToRemember", event.target.value)}
+        />
+      </label>
+
+      <button
+        className="light-button"
+        type="button"
+        onClick={saveFeedback}
+        disabled={isSaving || !artifactPath}
+      >
+        {isSaving ? "Saving feedback..." : "Save feedback"}
+      </button>
+
+      {!artifactPath ? (
+        <p className="auth-note">Feedback requires a saved evaluation artifact.</p>
+      ) : null}
+      {saveStatus ? <p className="auth-note">{saveStatus}</p> : null}
+      {saveError ? <p className="auth-error">{saveError}</p> : null}
+    </section>
   );
 }
 
@@ -483,7 +738,7 @@ export function CompToolPlayground() {
         </div>
       </section>
 
-      <section className="panel">
+      <section id="evaluation" className="panel evaluation-panel">
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Output</p>

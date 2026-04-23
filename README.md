@@ -60,6 +60,7 @@ npm run build:comp-corpus
 - If both keys are present and `LLM_PROVIDER=auto`, the app currently prefers Anthropic first, then OpenAI.
 - If no provider key is present, the app still returns retrieval, prompts, and a `not_configured` generation state.
 - Evaluation artifacts are written to `data/evaluations/*.json`.
+- Review feedback is written to `data/feedback/*.json`.
 
 ## Land Insights ingestion
 
@@ -94,7 +95,7 @@ This repo includes [render.yaml](./render.yaml) for a Render web service deploym
 
 ### Important note about saved evaluations
 
-The app writes QA artifacts to `data/evaluations`, but Render's filesystem is ephemeral by default. That means saved evaluations can be lost on restart or redeploy unless you either:
+The app writes QA artifacts to `data/evaluations` and reviewer corrections to `data/feedback`, but Render's filesystem is ephemeral by default. That means saved evaluations and feedback can be lost on restart or redeploy unless you either:
 
-- attach a persistent disk and mount it under `/opt/render/project/src/data/evaluations`, or
+- attach a persistent disk and mount it under `/opt/render/project/src/data`, or
 - move evaluation storage to a durable service such as a database or object store.

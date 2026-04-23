@@ -20,6 +20,25 @@ export interface CompEvaluateRequest {
   topK: number;
 }
 
+export type CompFeedbackRating = "yes" | "partial" | "no";
+
+export interface CompFeedbackPayload {
+  artifactPath: string;
+  rating: CompFeedbackRating;
+  correctDecision: string;
+  correctMarketValue: string;
+  correctOpeningOffer: string;
+  whatWasWrong: string;
+  whatShouldChange: string;
+  ruleToRemember: string;
+  reviewerName: string;
+}
+
+export interface CompFeedbackRecord extends CompFeedbackPayload {
+  id: string;
+  createdAt: string;
+}
+
 export type CompParcelEnrichmentStatus =
   | "fetched"
   | "inferred"

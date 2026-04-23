@@ -14,6 +14,12 @@ export function CompToolPageShell() {
         </div>
 
         <div className="hero-actions">
+          <Link className="secondary-button" href="/sop" target="_blank" rel="noreferrer">
+            SOP
+          </Link>
+          <Link className="light-button" href="#evaluation">
+            Evaluation
+          </Link>
           <Link className="secondary-button" href="/references">
             References
           </Link>
