@@ -11,7 +11,8 @@ import {
 import {
   COMP_MODE_DESCRIPTIONS,
   COMP_MODE_LABELS,
-  COMP_MODES,
+  DEFAULT_COMP_MODE,
+  MANUAL_COMP_MODES,
   type CompEvaluateResponse,
   type CompEvaluationDeliverable,
   type CompFeedbackPayload,
@@ -19,8 +20,11 @@ import {
   type CompMode,
 } from "@/comp-tool/types";
 
+type ModePreset = "default" | "manual";
+
 type FormState = {
-  mode: CompMode;
+  modePreset: ModePreset;
+  manualMode: Exclude<CompMode, "general">;
   parcelLink: string;
   county: string;
   state: string;
@@ -39,7 +43,8 @@ type ParseParcelResponse = Pick<
 type FeedbackFormState = Omit<CompFeedbackPayload, "artifactPath">;
 
 const DEFAULT_FORM: FormState = {
-  mode: "general",
+  modePreset: "default",
+  manualMode: "pricing",
   parcelLink: "",
   county: "",
   state: "",
@@ -71,6 +76,24 @@ const RECOMMENDATION_LABELS: Record<
   verify_first: "Verify first",
   pass: "Pass",
 };
+
+function getEffectiveMode(form: FormState): CompMode {
+  return form.modePreset === "manual" ? form.manualMode : DEFAULT_COMP_MODE;
+}
+
+function buildEvaluateRequestPayload(form: FormState) {
+  return {
+    mode: getEffectiveMode(form),
+    parcelLink: form.parcelLink,
+    county: form.county,
+    state: form.state,
+    acreage: form.acreage,
+    sellerAskingPrice: form.sellerAskingPrice,
+    question: form.question,
+    knownFacts: form.knownFacts,
+    topK: form.topK,
+  };
+}
 
 function mergeText(current: string, incoming: string) {
   const parts = [current, incoming]
@@ -323,7 +346,7 @@ function SimplifiedOutput({ result }: { result: CompEvaluateResponse }) {
             `State: ${result.request.state || "--"}`,
             `County: ${result.request.county || "--"}`,
             `Acreage: ${result.request.acreage || "--"}`,
-            `Asking price: ${result.request.sellerAskingPrice || "--"}`,
+            `Asking price: ${result.request.sellerAskingPrice || "Not provided"}`,
             `Parcel ingestion: ${result.parcelEnrichment?.status || "not used"}`,
             `Artifact: ${result.generation.artifactPath || "--"}`,
           ]}
@@ -508,6 +531,7 @@ export function CompToolPlayground() {
   const [isPending, startTransition] = useTransition();
   const [isParsing, startParseTransition] = useTransition();
   const countyOptions = COUNTY_OPTIONS_BY_STATE[form.state] ?? [];
+  const effectiveMode = getEffectiveMode(form);
   const hasCustomCounty = Boolean(
     form.county && form.state && !countyOptions.includes(form.county),
   );
@@ -536,7 +560,7 @@ export function CompToolPlayground() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(form),
+          body: JSON.stringify(buildEvaluateRequestPayload(form)),
         });
 
         if (!response.ok) {
@@ -575,7 +599,7 @@ export function CompToolPlayground() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(form),
+          body: JSON.stringify(buildEvaluateRequestPayload(form)),
         });
 
         if (!response.ok) {
@@ -609,17 +633,40 @@ export function CompToolPlayground() {
           <label className="field">
             <span>Mode</span>
             <select
-              value={form.mode}
-              onChange={(event) => updateField("mode", event.target.value as CompMode)}
+              value={form.modePreset}
+              onChange={(event) => updateField("modePreset", event.target.value as ModePreset)}
             >
-              {COMP_MODES.map((mode) => (
-                <option key={mode} value={mode}>
-                  {COMP_MODE_LABELS[mode]}
-                </option>
-              ))}
+              <option value="default">Default (Gen Comp)</option>
+              <option value="manual">Manual</option>
             </select>
-            <small>{COMP_MODE_DESCRIPTIONS[form.mode]}</small>
+            <small>
+              {form.modePreset === "default"
+                ? "Uses the standard Gen Comp workflow."
+                : "Switch to a specialized comp mode for a more directed analysis."}
+            </small>
           </label>
+
+          {form.modePreset === "manual" ? (
+            <label className="field">
+              <span>Manual focus</span>
+              <select
+                value={form.manualMode}
+                onChange={(event) =>
+                  updateField(
+                    "manualMode",
+                    event.target.value as FormState["manualMode"],
+                  )
+                }
+              >
+                {MANUAL_COMP_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {COMP_MODE_LABELS[mode]}
+                  </option>
+                ))}
+              </select>
+              <small>{COMP_MODE_DESCRIPTIONS[effectiveMode]}</small>
+            </label>
+          ) : null}
 
           <label className="field">
             <span>Parcel link</span>
@@ -693,13 +740,14 @@ export function CompToolPlayground() {
             </label>
 
             <label className="field">
-              <span>Asking price</span>
+              <span>Asking price (optional)</span>
               <input
                 type="text"
-                placeholder="$85,000"
+                placeholder="Leave blank if unknown"
                 value={form.sellerAskingPrice}
                 onChange={(event) => updateField("sellerAskingPrice", event.target.value)}
               />
+              <small>Optional. Most comps can still run without a seller ask.</small>
             </label>
           </div>
 

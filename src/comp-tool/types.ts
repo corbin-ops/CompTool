@@ -8,6 +8,11 @@ export const COMP_MODES = [
 
 export type CompMode = (typeof COMP_MODES)[number];
 
+export const DEFAULT_COMP_MODE: CompMode = "general";
+export const MANUAL_COMP_MODES = COMP_MODES.filter(
+  (mode) => mode !== DEFAULT_COMP_MODE,
+) as readonly Exclude<CompMode, typeof DEFAULT_COMP_MODE>[];
+
 export interface CompEvaluateRequest {
   mode: CompMode;
   parcelLink: string;
@@ -229,7 +234,7 @@ export interface CompEvaluateResponse {
 }
 
 const DEFAULT_REQUEST: CompEvaluateRequest = {
-  mode: "general",
+  mode: DEFAULT_COMP_MODE,
   parcelLink: "",
   county: "",
   state: "",
@@ -280,7 +285,7 @@ export function parseCompEvaluateRequest(payload: unknown): CompEvaluateRequest 
 }
 
 export const COMP_MODE_LABELS: Record<CompMode, string> = {
-  general: "General comp",
+  general: "Gen Comp",
   pricing: "Pricing",
   subdivision: "Subdivision",
   rural: "Rural",
