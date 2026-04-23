@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { useState, useTransition } from "react";
 
 import {
-  COMMON_COUNTY_OPTIONS_BY_STATE,
+  COUNTY_OPTIONS_BY_STATE,
   US_STATE_OPTIONS,
 } from "@/comp-tool/location-data";
 import {
@@ -161,10 +161,12 @@ function SimplifiedOutput({ result }: { result: CompEvaluateResponse }) {
       <OutputSection id="decision" title="1. Decision">
         <BulletList
           items={[
-            `Recommendation: ${RECOMMENDATION_LABELS[evaluation.decisionSummary.recommendation]}`,
-            `Next action: ${evaluation.decisionSummary.nextAction || "Needs verification"}`,
-            `Reason: ${evaluation.decisionSummary.decisionReason || evaluation.executiveSummary}`,
-            ...evaluation.decisionSummary.topRisks.slice(0, 3).map((risk) => `Risk: ${risk}`),
+            `Decision status: ${RECOMMENDATION_LABELS[evaluation.decisionSummary.recommendation]} (Hot lead / Warm lead / Nurture / Verify first / Pass)`,
+            `One-line decision: ${evaluation.decisionSummary.oneLineDecision || "Needs review"}`,
+            `Immediate next action: ${evaluation.decisionSummary.nextAction || "Needs verification"}`,
+            ...evaluation.decisionSummary.topRisks
+              .slice(0, 5)
+              .map((risk) => `Top risk: ${risk}`),
           ]}
         />
       </OutputSection>
@@ -250,7 +252,10 @@ export function CompToolPlayground() {
   const [parseStatus, setParseStatus] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [isParsing, startParseTransition] = useTransition();
-  const countyOptions = COMMON_COUNTY_OPTIONS_BY_STATE[form.state] ?? [];
+  const countyOptions = COUNTY_OPTIONS_BY_STATE[form.state] ?? [];
+  const hasCustomCounty = Boolean(
+    form.county && form.state && !countyOptions.includes(form.county),
+  );
 
   function updateField<Key extends keyof FormState>(key: Key, value: FormState[Key]) {
     setForm((current) => ({
@@ -400,19 +405,24 @@ export function CompToolPlayground() {
 
             <label className="field">
               <span>County</span>
-              <input
-                list="county-options"
-                type="text"
-                placeholder={form.state ? "Select or type county" : "Select state first"}
+              <select
                 value={form.county}
                 onChange={(event) => updateField("county", event.target.value)}
-              />
-              <datalist id="county-options">
+                disabled={!form.state}
+              >
+                <option value="">
+                  {form.state ? "Select county" : "Select state first"}
+                </option>
+                {hasCustomCounty ? <option value={form.county}>{form.county}</option> : null}
                 {countyOptions.map((county) => (
-                  <option key={county} value={county} />
+                  <option key={county} value={county}>
+                    {county}
+                  </option>
                 ))}
-              </datalist>
-              <small>Searchable county dropdown. Type manually if the county is not listed.</small>
+              </select>
+              <small>
+                County options update after state selection.
+              </small>
             </label>
           </div>
 
